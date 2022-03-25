@@ -1,6 +1,6 @@
 import { signal } from "/spider/distributor.js";
 
-const spiderDataFile = "spider_data.txt";
+const spiderDataFile = "/spider/spider_hacked_hosts.txt";
 
 /** @param {import("..").NS } ns */
 function prep(ns, target) {
@@ -56,9 +56,10 @@ async function spider(ns) {
         }
         
         hosts = hosts.concat(ns.scan(host));
+        
     }
-    
     await ns.write(spiderDataFile, hacked.join("\n"), "w");
+    firstRun = false;
 }
 
 /** @param {import("..").NS } ns */

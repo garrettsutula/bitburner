@@ -1,14 +1,24 @@
 import { execa } from "/spider/exec.js";
+const scriptPaths = {
+    touch: "/spider/touch.js",
+    hack: "/spider/hack.js",
+    weaken: "/spider/weaken.js",
+    watchSecurity: "/spider/watch-security.js",
+    spider: "/spider/spider.js",
+}
+const spiderHostsFile = "/spider/spider_hacked_hosts.txt";
+const currentWeakenTargets = new Set();
+const currentHackTargets = new Set();
 
 /** @param {import("..").NS } ns */
 function getSpiderData(ns) {
-    return ns.read("spider_data.txt").split("\n");
+    return ns.read(spiderHostsFile).split("\n");
 }
 
 /** @param {import("..").NS } ns */
 export function signal(ns, host, status) {
   ns.tprint(`Notification: ${host} new status "${status.toUpperCase()}"`);
-  ns.exec("/spider/touch.js", "home", 1, `/notifications/${host}.notification.txt`, host, status);
+  ns.exec(scriptPaths.touch, "home", 1, `/notifications/${host}.notification.txt`, host, status);
 }
 
 /** @param {import("..").NS } ns */
@@ -40,14 +50,12 @@ async function awaitSignal(ns) {
  * @param {string} host - target hostname
  * */
 async function killHacks(ns, host) {
-    ns.scriptKill("hack.js", host);
-    ns.scriptKill("weaken.js", host);
+    ns.scriptKill(scriptPaths.hack, host);
+    ns.scriptKill(scriptPaths.weaken, host);
+    ns.scriptKill(scriptPaths.watchSecurity, host);
     if (host !== "home") {
         ns.killall(host); // temporary:
         await ns.scp(ns.ls("home", "spider"), "home", host);
-    } else {
-        ns.scriptKill('weaken.js', 'home');
-        ns.scriptKill('hack.js', 'home');
     }
 }
 
@@ -86,22 +94,30 @@ async function scheduleOn(ns, hostNames, hostMaxRam, jobScript, jobThreads, jobT
  * @param {string[]} hostnames - list of hostnames that can run weaken & hack processes
  * @param {string[]} hostmaxram - matching list of available ram to run weaken & hack processes.
  */
-async function doHacks(ns, targets, hostnames, hostmaxram) {
+async function doHacks(ns, targets = [], hostnames, hostmaxram) {
+    const newHackTargets = [];
+    const newWeakenTargets = [];
     // Weaken targets in rough order weakest -> hardest.
     const weakenTargets = [...targets];
     while (weakenTargets.length > 0 && hostnames.length > 0) {
         const currentTarget = weakenTargets.shift();
+        const alreadyWeakened = ns.getServerSecurityLevel(currentTarget) <= 3 + ns.getServerMinSecurityLevel(currentTarget);
         // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
         const weakenCount = Math.floor(
             (ns.getServerSecurityLevel(currentTarget) - ns.getServerMinSecurityLevel(currentTarget)) / 0.05
             );
-        ns.tprint(`${currentTarget} needs ${weakenCount} threads.`);
         const tag = -1;
-        if (weakenCount > 0) {
-            await scheduleOn(ns, hostnames, hostmaxram, "/spider/weaken.js", weakenCount, currentTarget, tag);
+        if (!alreadyWeakened && !currentWeakenTargets.has(currentTarget)) {
+            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.weaken, weakenCount, currentTarget, tag);
             // Watch for the security level on this host to get low then notify this script to set hacking up.
-            ns.run("/spider/watch-security.js", 1, currentTarget);
+            currentWeakenTargets.add(currentTarget);
+            newWeakenTargets.push(currentTarget);
+            ns.run(scriptPaths.watchSecurity, 1, currentTarget);
         }
+    }
+    if (newWeakenTargets.length > 0) ns.tprint(`Now Weakening: ${newWeakenTargets.join(", ")}`);
+    if (weakenTargets.length > 0) {
+        ns.tprint(`${weakenTargets.length} remaining targets to weaken.`);
     }
 
     // If we have resources left, hack targets in rough order hardest -> weakest
@@ -109,20 +125,23 @@ async function doHacks(ns, targets, hostnames, hostmaxram) {
     let currentTarget;
     while (targets.length > 0 && hostnames.length > 0) {
         currentTarget = targets.pop();
-        ns.tprint(`Hacking ${currentTarget}`);
-        for (let i = 0; hostnames.length > 0 && i < 15; i += 1) {
-            await scheduleOn(ns, hostnames, hostmaxram, "/spider/weaken.js", 1, currentTarget, i);
-            await scheduleOn(ns, hostnames, hostmaxram, "/spider/hack.js", 6, currentTarget, i);
+        for (let i = 0; hostnames.length > 0 && i < 20; i += 1) {
+            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.weaken, 8, currentTarget, i);
+            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.hack, 45, currentTarget, i);
         }
+        newHackTargets.push(currentTarget);
     }
+    if(newHackTargets.length) ns.tprint(`Now Hacking: ${newHackTargets.join(", ")}`);
     // Return remaining targets to caller, if any.
-    if (targets.length > 0) {
+    if (targets.length > 0 && currentTarget) {
         targets.push(currentTarget);
-        ns.tprint(`Remaining targets to hack: ${targets.length}`);
-        return targets;
+        ns.tprint(`${targets.length} remaining targets to hack.`);
     } else {
         ns.tprint('All targets hacked.')
     }
+    const remainingRam = hostmaxram.reduce((acc, ram) => acc + ram, 0);
+    if (remainingRam < 512) ns.tprint(`WARNING: Low RAM, ${remainingRam}GB available across all hosts.`);
+    return targets;
 }
 
 /** @param {import("..").NS } ns */
@@ -133,14 +152,18 @@ export async function main(ns) {
     let targets = [];
 
     // Clear notification folder on startup to prepare for first iteration.
-    await consumeSignal(ns);
+    consumeSignal(ns);
 
     while (true) {
         // Get target list from spider on the first iteration, remaining targets subsequent iterations.
         if (firstRun) {
+            ns.exec(scriptPaths.spider, "home", 1);
+            while(!ns.fileExists(spiderHostsFile)) await ns.sleep(250);
+            ns.tprint('First iteration, getting targets from spider hacked hosts file.');
             targets = getSpiderData(ns);
-            ns.tprint(`# of Targets: ${targets.length}`);
+            
         }
+        ns.tprint(`# of Targets: ${targets.length}`);
         // Set host list, process scheduling starts at the beginning of the array.
         const hosts = ["home"].concat(ns.getPurchasedServers(), getSpiderData(ns));
         ns.tprint(`# of Hosts: ${hosts.length}`);
@@ -167,12 +190,19 @@ export async function main(ns) {
         // Await notifications of newly weakened or hacked servers to continue.
         hostNotifications = await awaitSignal(ns);
         // If the server isn't in our list of remaining targets, add it.
-        hostNotifications.forEach(({server, status}) => {
-            if(!targets.includes(server)) {
-                targets.push(server);
-                console.log(`Added ${server} to target list.`);
+        hostNotifications.forEach((notification) => {
+            const {host, status} = notification;
+            if(!targets.includes(host)) {
+                targets.push(host);
+                console.log(`Added ${host} to target list.`);
+            }
+            switch (status) {
+                case 'weakened':
+                default:
+                    if(currentWeakenTargets.has(host)) currentWeakenTargets.delete(host);
             }
         });
+        firstRun = false;
     }
 }
 

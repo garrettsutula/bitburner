@@ -10,7 +10,7 @@ export async function main(ns) {
     // amount of servers
     while (purchasedServerCount < ns.getPurchasedServerLimit()) {
         await ns.sleep(1000);
-        if (ns.getServerMoneyAvailable("home") > ns.getPurchasedServerCost(ram) && serverCount < 25) {
+        if (ns.getServerMoneyAvailable("home") > ns.getPurchasedServerCost(ram)) {
             const hostname = await ns.purchaseServer("gserv-" + purchasedServerCount, ram);
             ++purchasedServerCount;
         }
