@@ -3,9 +3,7 @@ export async function main(ns) {
     const intervalSeconds = 30 * 1000;
     ns.disableLog("sleep");
     ns.disableLog("getServerMoneyAvailable");
-    // How much RAM each purchased server will have. In this case, it'll
-    // be 8GB.
-    var ram = 1048576;
+    var ram = 1048576; // It's over 9000
 
     let purchasedServerCount = ns.getPurchasedServers().length - 1;
 
