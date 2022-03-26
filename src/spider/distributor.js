@@ -101,7 +101,7 @@ async function doHacks(ns, targets = [], hostnames, hostmaxram) {
     const weakenTargets = [...targets];
     while (weakenTargets.length > 0 && hostnames.length > 0) {
         const currentTarget = weakenTargets.shift();
-        const alreadyWeakened = ns.getServerSecurityLevel(currentTarget) <= 3 + ns.getServerMinSecurityLevel(currentTarget);
+        const alreadyWeakened = ns.getServerSecurityLevel(currentTarget) <= 5 + ns.getServerMinSecurityLevel(currentTarget);
         // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
         const weakenCount = Math.floor(
             (ns.getServerSecurityLevel(currentTarget) - ns.getServerMinSecurityLevel(currentTarget)) / 0.05
@@ -125,9 +125,9 @@ async function doHacks(ns, targets = [], hostnames, hostmaxram) {
     let currentTarget;
     while (targets.length > 0 && hostnames.length > 0) {
         currentTarget = targets.pop();
-        for (let i = 0; hostnames.length > 0 && i < 20; i += 1) {
-            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.weaken, 8, currentTarget, i);
-            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.hack, 45, currentTarget, i);
+        for (let i = 0; hostnames.length > 0 && i < 5; i += 1) {
+            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.weaken, 64, currentTarget, i);
+            await scheduleOn(ns, hostnames, hostmaxram, scriptPaths.hack, 360, currentTarget, i);
         }
         newHackTargets.push(currentTarget);
     }
