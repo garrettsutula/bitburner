@@ -10,3 +10,8 @@ export function clearSpiderStorage() {
   window.localStorage.removeItem('rootedHosts');
   window.localStorage.removeItem('discoveredHosts');
 }
+
+export function clearDistributorStorage() {
+  window.localStorage.removeItem('weakeningHosts');
+  window.localStorage.removeItem('hackingHosts');
+}

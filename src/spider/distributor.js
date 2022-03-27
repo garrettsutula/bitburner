@@ -66,16 +66,18 @@ async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = fal
 }
 
 async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLogs) {
-    const notAlreadyWeakened = ns.getServerSecurityLevel(host) > 5 + ns.getServerMinSecurityLevel(host);
+    const notAlreadyWeakened = ns.getServerSecurityLevel(host) > 3 + ns.getServerMinSecurityLevel(host);
     if (notAlreadyWeakened && !weakeningHosts.includes(host)) {
         const tag = -1;
         // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
         const weakenThreadCount = Math.floor(
             (ns.getServerSecurityLevel(host) - ns.getServerMinSecurityLevel(host)) / 0.05
         );
-        newWeakenLogs.push(`\tWEAKENING: ${host} with ${weakenThreadCount} threads.`);
+        if (!hackingHosts.includes(host)) {
+            newWeakenLogs.push(`\tWEAKENING: ${host} with ${weakenThreadCount} threads.`);
+            newWeakens.push(host);
+        }
         weakeningHosts.push(host);
-        newWeakens.push(host);
         await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, tag);
         // Watch for the security level on this host to get low then notify this script to set hacking up.
         ns.run(scriptPaths.watchSecurity, 1, host);
@@ -86,6 +88,7 @@ async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLo
 export async function main(ns) {
     ns.disableLog('getServerSecurityLevel');
     ns.disableLog('getServerMinSecurityLevel');
+    ns.disableLog('getServerUsedRam');
     const minHomeRamAvailable = 256;
     let count = 1;
 
@@ -129,7 +132,7 @@ export async function main(ns) {
         if(controlledHostsWithMetadata.length) {
             while (controlledHostsWithMetadata.length) {
                 for (const host of rootedHosts) {
-                    await hack(ns, host, controlledHostsWithMetadata);
+                    await hack(ns, host, controlledHostsWithMetadata, true);
                 }
             }
         }
