@@ -1,6 +1,7 @@
-import { signal } from "/spider/distributor.js";
-
-const spiderDataFile = "/spider/spider_hacked_hosts.txt";
+import { get, set, clearSpiderStorage } from '/spider/utils.js';
+let discoveredHosts = [];
+let rootedHosts = [];
+let controlledHosts = [];
 
 /** @param {import("..").NS } ns */
 function prep(ns, target) {
@@ -8,11 +9,14 @@ function prep(ns, target) {
     const currentHackingLevel = ns.getHackingLevel();
     if ( requiredHackingLevel >
         currentHackingLevel) {
-        ns.print(`Can't hack ${target} yet, required level: ${requiredHackingLevel}`);
+        discoveredHosts.push(target);
+        ns.tprint(`SPIDER: Can't hack ${target} yet, required level: ${requiredHackingLevel}`);
         return false;
     }
-    if (ns.hasRootAccess(target)) return true;
-    
+    if (ns.hasRootAccess(target)) {
+        rootedHosts.push(target);
+        return true;
+    }
     function can(action) {
         return ns.fileExists(action + ".exe", "home");
     }
@@ -25,20 +29,22 @@ function prep(ns, target) {
     if (can("sqlinject")) { ns.sqlinject(target); ports += 1; }
     
     if (ports >= ns.getServerNumPortsRequired(target)) {
+        rootedHosts.push(target);
         return ns.nuke(target);    
     } else {
+        discoveredHosts.push(target);
         return false;
     }
 }
 
 /** @param {import("..").NS } ns */
 async function spider(ns) {
-    let firstRun = true;
-    let hosts = ["home"];
-    let hacked = ns.read(spiderDataFile).split("\n");
+    discoveredHosts = [];
+    rootedHosts = [];
+    controlledHosts = ["home"].concat(ns.getPurchasedServers());
+    let hosts = [];
     const seen = ["darkweb"].concat(ns.getPurchasedServers());
-    if (hacked.length == 1 && hacked[0] === "") hacked = [];
-
+    hosts.push("home");
     while (hosts.length > 0) {
         const host = hosts.shift();
 
@@ -46,30 +52,29 @@ async function spider(ns) {
         if (seen.includes(host)) continue;
         seen.push(host);
         
-        if (!prep(ns, host)) {
+        // We don't have root access & can't scan from this host.
+        if (host !== 'home' && !prep(ns, host)) {
             continue;
         }
-        
-        if (host != "home" && !hacked.includes(host)) {
-            hacked.push(host);
-            if (!firstRun) signal(ns, host, "hacked");
-        }
-        
         hosts = hosts.concat(ns.scan(host));
-        
     }
-    await ns.write(spiderDataFile, hacked.join("\n"), "w");
-    firstRun = false;
+    const lastDiscoveredHosts = get('discoveredHosts') || [];
+    if(discoveredHosts.length > lastDiscoveredHosts.length) ns.tprint(`SPIDER: ${discoveredHosts.length - lastDiscoveredHosts.length} newly discovered hosts`)
+    set('discoveredHosts', discoveredHosts);
+    set('rootedHosts', rootedHosts);
+    // reverse() explanation: Last rooted hosts likely have more RAM so we should start with those.
+    set('controlledHosts', controlledHosts.concat(rootedHosts.reverse()));
 }
 
 /** @param {import("..").NS } ns */
 export async function main(ns) {
+    ns.disableLog('sleep');
     ns.disableLog('getHackingLevel');
     ns.disableLog('getServerRequiredHackingLevel');
     ns.disableLog('scan');
 
-    await ns.sleep(1000);
-    ns.rm(spiderDataFile);
+    // Clear the LocalStorage that the spider owns.
+    clearSpiderStorage();
 
     while (true) {
         await spider(ns);
