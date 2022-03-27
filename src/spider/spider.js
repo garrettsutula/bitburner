@@ -41,11 +41,11 @@ function prep(ns, target) {
 async function spider(ns) {
     discoveredHosts = [];
     rootedHosts = [];
-    controlledHosts = ["home"].concat(ns.getPurchasedServers());
-    let hosts = [];
+    let hosts = []; 
     const seen = ["darkweb"].concat(ns.getPurchasedServers());
     hosts.push("home");
     while (hosts.length > 0) {
+        controlledHosts = ["home"].concat(ns.getPurchasedServers());
         const host = hosts.shift();
 
         // We've already seen this host during this scan.

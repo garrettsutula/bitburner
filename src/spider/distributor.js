@@ -86,9 +86,11 @@ async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLo
 
 /** @param {import("..").NS } ns */
 export async function main(ns) {
+    controlledHosts = get('controlledHosts');
     ns.disableLog('getServerSecurityLevel');
     ns.disableLog('getServerMinSecurityLevel');
     ns.disableLog('getServerUsedRam');
+    ns.disableLog('getServerMaxRam');
     const minHomeRamAvailable = 256;
     let count = 1;
 
@@ -103,9 +105,9 @@ export async function main(ns) {
     // save to local storage other scripts each loop
 
     while (true) {
-        controlledHosts = get('controlledHosts');
-        rootedHosts = get('rootedHosts');
-        weakeningHosts = get('weakeningHosts');
+        controlledHosts = get('controlledHosts') || [];
+        rootedHosts = get('rootedHosts') || [];
+        weakeningHosts = get('weakeningHosts') || [];
 
         const controlledHostsWithMetadata = controlledHosts.map((host) => {
             let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
@@ -137,9 +139,7 @@ export async function main(ns) {
             }
         }
         */
-        set('weakeningHosts', weakeningHosts);
-        set('hackingHosts', hackingHosts);
-        count += 1;
+
         if (newHacks.length || newWeakens.length) {
             ns.tprint(`DISTRIBUTOR:
             \tLoop #${count}
@@ -152,6 +152,9 @@ export async function main(ns) {
             newHacks = [];
             newWeakens = [];
         }
+        count += 1;
+        set('weakeningHosts', weakeningHosts);
+        set('hackingHosts', hackingHosts);
         await ns.sleep(10000);
     }
 }
