@@ -4,7 +4,7 @@ import { get, set } from "/spider/utils.js";
 export async function main(ns) {
   const [target, tag] = ns.args;
   var securityThresh = ns.getServerMinSecurityLevel(target) + 3;
-  while ((ns.getServerSecurityLevel(target) > securityThresh) || tag !== -1) {
+  while ((ns.getServerSecurityLevel(target) > securityThresh) || tag !== 'initial') {
     await ns.weaken(target);
   }
   set('weakeningHosts', get('weakeningHosts').filter((host) => host !== target));

@@ -1,4 +1,5 @@
 import { get, set, clearDistributorStorage } from "/spider/utils.js";
+import { shortId } from '/utils/uuid';
 import { execa } from "/spider/exec.js";
 const scriptPaths = {
     touch: "/spider/touch.js",
@@ -57,8 +58,9 @@ async function scheduleOn(ns, controlledHostsWithMetadata, jobScript, jobThreads
 async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = false) {
     if (!hackingHosts.includes(host) || extraHackRounds) {
         for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 5; i += 1) {
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, i);
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 2880, host, i);
+            const processTag = shortId();
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, processTag);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 3072, host, processTag);
         }
         hackingHosts.push(host);
         newHacks.push(host);
@@ -80,9 +82,8 @@ async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLo
             newWeakens.push(host);
         }
         weakeningHosts.push(host);
-        await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, tag);
-        // Watch for the security level on this host to get low then notify this script to set hacking up.
-        ns.run(scriptPaths.watchSecurity, 1, host);
+        set('weakeningHosts', weakeningHosts);
+        await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, 'initial');
     }
 }
 
@@ -129,7 +130,7 @@ export async function main(ns) {
         if (newWeakenLogs.length) ns.tprint(`\n${newWeakenLogs.join('\n')}`);
 
         if(controlledHostsWithMetadata.length) {
-            for (const host of rootedHosts) {
+            for (const host of rootedHosts.reverse()) {
                 await hack(ns, host, controlledHostsWithMetadata);
             } 
         }
