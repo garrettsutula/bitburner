@@ -66,7 +66,9 @@ async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = fal
 }
 
 async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLogs) {
-    const notAlreadyWeakened = ns.getServerSecurityLevel(host) > 3 + ns.getServerMinSecurityLevel(host);
+    const currentSecurityLevel = ns.getServerSecurityLevel(host);
+    const minimumSecurityLevel = ns.getServerMinSecurityLevel(host);
+    const notAlreadyWeakened = currentSecurityLevel > (hackingHosts.includes(host) ? 9 : 3) + minimumSecurityLevel;
     if (notAlreadyWeakened && !weakeningHosts.includes(host)) {
         const tag = -1;
         // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
