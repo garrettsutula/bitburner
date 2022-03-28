@@ -1,5 +1,5 @@
 import { get, set, clearDistributorStorage } from "/utils/localStorage.js";
-import { shortId } from '/utils/uuid';
+import { shortId } from '/utils/uuid.js';
 import { execa } from "/spider/exec.js";
 const scriptPaths = {
     touch: "/spider/touch.js",
@@ -26,6 +26,7 @@ async function killHacks(ns, host) {
     if (host !== "home") {
         ns.killall(host);
         await ns.scp(ns.ls("home", "/spider"), "home", host);
+        await ns.scp(ns.ls("home", "/utils"), "home", host);
     }
 }
 
@@ -94,6 +95,7 @@ export async function main(ns) {
     ns.disableLog('getServerMinSecurityLevel');
     ns.disableLog('getServerUsedRam');
     ns.disableLog('getServerMaxRam');
+    ns.disableLog('scp');
     const minHomeRamAvailable = 256;
     let count = 1;
 

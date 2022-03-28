@@ -1,4 +1,4 @@
-import { shortId } from "/utils/utils.js"
+import { shortId } from "/utils/uuid.js"
 import { get } from "/utils/localStorage.js"
 import { execa } from "/spider/exec.js";
 const scriptPaths = {

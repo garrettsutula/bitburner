@@ -5,5 +5,5 @@ export function uuidv4() {
 }
 
 export function shortId() {
-  return uuidv4.substr(0, 4);
+  return uuidv4().substr(0, 4);
 }
