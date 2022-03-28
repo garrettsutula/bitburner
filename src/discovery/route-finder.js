@@ -3,7 +3,7 @@ const seen = []
 
 /** @param {import("..").NS } ns */
 function recursiveScan(ns, host, targetHost, networkSignature) {
-  networkSignature += `.${host}`;
+  networkSignature += `${networkSignature.length ? '.' : ''}${host}`;
   if (host === targetHost) {
     foundPaths.push(networkSignature);
   }
