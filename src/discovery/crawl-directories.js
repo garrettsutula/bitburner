@@ -1,14 +1,29 @@
+const foundFiles = {};
+let seen = [];
+const ignoreFilePaths = [
+	'/spider/spider_hacked_hosts.txt',
+	'spider_data.txt',
+	'foundFiles.txt',
+	'file-list.txt'
+];
+
+
+/** @param {import("..").NS } ns */
+function recursiveScan(ns, host) {
+	const filePaths = ns.ls(host);
+	const specialFiles = filePaths
+		.filter((filePath) => (!filePath.includes('.js') && !filePath.includes('.exe') && !ignoreFilePaths.includes(filePath)));
+	if(specialFiles.length) foundFiles[host] = `*****Server: ${host}\n\t${specialFiles.join("\n\t")}`;
+  if (!seen.includes(host)) {
+    seen.push(host);
+    return ns.scan(host).map((childHost) => recursiveScan(ns, childHost));
+  }
+}
+
 /** @param {import("..").NS } ns */
 export async function main(ns) {
-	let i = ns.args[0] || 0;
-	var connectedServers = await ns.scan();
-	if (i > 0) connectedServers.shift();
-	const allFiles = [];
-	for (const server of connectedServers) {
-		const files = ns.ls(server);
-		const specialFiles = files.filter((file) => !file.includes('.js'));
-		allFiles.push(`*****Server: ${server}`, specialFiles.join("\n"));
-
-	}
-	ns.write('file-list.txt', allFiles.join("\r\n"), 'w');
+	seen = ["darkweb"].concat(ns.getPurchasedServers());
+  recursiveScan(ns, 'home');
+  ns.tprint(`${Object.keys(foundFiles).length} hosts with interesting files`);
+	await ns.write('foundFiles.txt', Object.values(foundFiles).join("\n\n"), "w");
 }
