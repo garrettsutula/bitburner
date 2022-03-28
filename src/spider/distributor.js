@@ -25,7 +25,7 @@ async function killHacks(ns, host) {
     ns.scriptKill(scriptPaths.watchSecurity, host);
     if (host !== "home") {
         ns.killall(host);
-        await ns.scp(ns.ls("home", "spider"), "home", host);
+        await ns.scp(ns.ls("home", "/spider"), "home", host);
     }
 }
 
