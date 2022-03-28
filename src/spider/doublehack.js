@@ -1,4 +1,5 @@
-import { get, uuidv4 } from "/spider/utils.js"
+import { shortId } from "/utils/utils.js"
+import { get } from "/utils/localStorage.js"
 import { execa } from "/spider/exec.js";
 const scriptPaths = {
     touch: "/spider/touch.js",
@@ -7,26 +8,10 @@ const scriptPaths = {
     watchSecurity: "/spider/watch-security.js",
     spider: "/spider/spider.js",
 };
-let weakeningHosts = [];
 let hackingHosts = [];
 let controlledHosts = get('controlledHosts');
 let rootedHosts = get('rootedHosts');
 let newHacks = [];
-let newWeakens = [];
-
-/** 
- * @param {import("..").NS } ns 
- * @param {string} host - target hostname
- * */
-async function killHacks(ns, host) {
-    ns.scriptKill(scriptPaths.hack, host);
-    ns.scriptKill(scriptPaths.weaken, host);
-    ns.scriptKill(scriptPaths.watchSecurity, host);
-    if (host !== "home") {
-        ns.killall(host);
-        await ns.scp(ns.ls("home", "spider"), "home", host);
-    }
-}
 
 /** 
  * @param {import("..").NS } ns 
@@ -56,9 +41,10 @@ async function scheduleOn(ns, controlledHostsWithMetadata, jobScript, jobThreads
 
 async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = false) {
     if (!hackingHosts.includes(host) || extraHackRounds) {
-        for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 5; i += 1) {
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, uuidv4());
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 2880, host, uuidv4());
+        for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 10; i += 1) {
+            const processId = `extra-${shortId()}`;
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, processId);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 3072, host, processId);
         }
         hackingHosts.push(host);
         newHacks.push(host);
@@ -72,10 +58,8 @@ export async function main(ns) {
     ns.disableLog('getServerUsedRam');
     const minHomeRamAvailable = 256;
 
-
         controlledHosts = get('controlledHosts');
         rootedHosts = get('rootedHosts');
-        weakeningHosts = get('weakeningHosts');
 
         const controlledHostsWithMetadata = controlledHosts.map((host) => {
             let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);

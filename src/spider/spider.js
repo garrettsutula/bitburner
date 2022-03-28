@@ -1,4 +1,4 @@
-import { get, set, clearSpiderStorage } from '/spider/utils.js';
+import { get, set, clearSpiderStorage } from '/utils/localStorage.js';
 let discoveredHosts = [];
 let rootedHosts = [];
 let controlledHosts = [];

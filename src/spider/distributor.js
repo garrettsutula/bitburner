@@ -1,4 +1,4 @@
-import { get, set, clearDistributorStorage } from "/spider/utils.js";
+import { get, set, clearDistributorStorage } from "/utils/localStorage.js";
 import { shortId } from '/utils/uuid';
 import { execa } from "/spider/exec.js";
 const scriptPaths = {

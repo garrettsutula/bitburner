@@ -1,4 +1,4 @@
-import { get, set } from "/spider/utils.js";
+import { get, set } from "/utils/localStorage.js";
 
 /** @param {import("..").NS } ns */
 export async function main(ns) {
