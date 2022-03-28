@@ -1,4 +1,4 @@
-import { get, set } from "/spider/utils.js"
+import { get, set, clearDistributorStorage } from "/spider/utils.js";
 import { execa } from "/spider/exec.js";
 const scriptPaths = {
     touch: "/spider/touch.js",
@@ -98,16 +98,17 @@ export async function main(ns) {
     for (const host of controlledHosts) {
         await killHacks(ns, host);
     }
-    set('weakeningHosts', weakeningHosts);
-    set ('hackingHosts', hackingHosts);
+    clearDistributorStorage();
+    set('weakeningHosts', []);
+    set ('hackingHosts', []);
 
     // for each rooted host, hack or weaken and add to array
     // save to local storage other scripts each loop
 
     while (true) {
-        controlledHosts = get('controlledHosts') || [];
-        rootedHosts = get('rootedHosts') || [];
-        weakeningHosts = get('weakeningHosts') || [];
+        controlledHosts = get('controlledHosts');
+        rootedHosts = get('rootedHosts');
+        weakeningHosts = get('weakeningHosts');
 
         const controlledHostsWithMetadata = controlledHosts.map((host) => {
             let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
