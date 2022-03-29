@@ -1,4 +1,4 @@
-import { get, set, clearSpiderStorage } from '/utils/localStorage.js';
+// import { get, set, clearSpiderStorage } from '/utils/localStorage.js';
 let discoveredHosts = [];
 let rootedHosts = [];
 let controlledHosts = [];
@@ -58,12 +58,15 @@ async function spider(ns) {
         }
         hosts = hosts.concat(ns.scan(host));
     }
-    const lastDiscoveredHosts = get('discoveredHosts') || [];
-    if(discoveredHosts.length > lastDiscoveredHosts.length) ns.tprint(`SPIDER: ${discoveredHosts.length - lastDiscoveredHosts.length} newly discovered hosts`)
-    set('discoveredHosts', discoveredHosts);
-    set('rootedHosts', rootedHosts);
+    // const lastDiscoveredHosts = get('discoveredHosts') || [];
+    // if(discoveredHosts.length > lastDiscoveredHosts.length) ns.tprint(`SPIDER: ${discoveredHosts.length - lastDiscoveredHosts.length} newly discovered hosts`)
+    // set('discoveredHosts', discoveredHosts);
+    // set('rootedHosts', rootedHosts);
     // reverse() explanation: Last rooted hosts likely have more RAM so we should start with those.
-    set('controlledHosts', controlledHosts.concat(rootedHosts.reverse()));
+    // set('controlledHosts', controlledHosts.concat(rootedHosts.reverse()));
+    await ns.write('/data/discoveredHosts.txt', JSON.stringify(discoveredHosts), 'w');
+    await ns.write('/data/rootedHosts.txt', JSON.stringify(rootedHosts), 'w');
+    await ns.write('/data/controlledHosts.txt', JSON.stringify(controlledHosts.concat(rootedHosts.reverse())), 'w');
 }
 
 /** @param {import("..").NS } ns */
@@ -74,7 +77,7 @@ export async function main(ns) {
     ns.disableLog('scan');
 
     // Clear the LocalStorage that the spider owns.
-    clearSpiderStorage();
+    // clearSpiderStorage();
 
     while (true) {
         await spider(ns);

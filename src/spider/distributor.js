@@ -1,4 +1,4 @@
-import { get, set, clearDistributorStorage } from "/utils/localStorage.js";
+// import { get, set, clearDistributorStorage } from "/utils/localStorage.js";
 import { shortId } from '/utils/uuid.js';
 import { execa } from "/spider/exec.js";
 const scriptPaths = {
@@ -10,8 +10,10 @@ const scriptPaths = {
 };
 let weakeningHosts = [];
 let hackingHosts = [];
-let controlledHosts = get('controlledHosts');
-let rootedHosts = get('rootedHosts');
+let controlledHosts = [];
+let rootedHosts = [];
+// let controlledHosts = get('controlledHosts');
+// let rootedHosts = get('rootedHosts');
 let newHacks = [];
 let newWeakens = [];
 
@@ -58,10 +60,11 @@ async function scheduleOn(ns, controlledHostsWithMetadata, jobScript, jobThreads
 
 async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = false) {
     if (!hackingHosts.includes(host) || extraHackRounds) {
-        for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 5; i += 1) {
+        for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 2; i += 1) {
             const processTag = shortId();
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, processTag);
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 3072, host, processTag);
+            await ns.sleep(30);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 1, host, processTag);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 6, host, processTag);
         }
         hackingHosts.push(host);
         newHacks.push(host);
@@ -83,14 +86,14 @@ async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLo
             newWeakens.push(host);
         }
         weakeningHosts.push(host);
-        set('weakeningHosts', weakeningHosts);
+        // set('weakeningHosts', weakeningHosts);
         await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, 'initial');
     }
 }
 
 /** @param {import("..").NS } ns */
 export async function main(ns) {
-    controlledHosts = get('controlledHosts');
+    // controlledHosts = get('controlledHosts');
     ns.disableLog('getServerSecurityLevel');
     ns.disableLog('getServerMinSecurityLevel');
     ns.disableLog('getServerUsedRam');
@@ -103,18 +106,20 @@ export async function main(ns) {
     for (const host of controlledHosts) {
         await killHacks(ns, host);
     }
-    clearDistributorStorage();
-    set('weakeningHosts', []);
-    set ('hackingHosts', []);
+    // clearDistributorStorage();
+    // set('weakeningHosts', []);
+    // set ('hackingHosts', []);
 
     // for each rooted host, hack or weaken and add to array
     // save to local storage other scripts each loop
 
     while (true) {
-        controlledHosts = get('controlledHosts');
-        rootedHosts = get('rootedHosts');
-        weakeningHosts = get('weakeningHosts');
-
+        // controlledHosts = get('controlledHosts');
+        // rootedHosts = get('rootedHosts');
+        // weakeningHosts = get('weakeningHosts');
+        controlledHosts = JSON.parse(ns.read('/data/controlledHosts.txt'));
+        rootedHosts = JSON.parse(ns.read('/data/rootedHosts.txt'));
+        ns.tprint(`rooted: ${JSON.stringify(rootedHosts)}`)
         const controlledHostsWithMetadata = controlledHosts.map((host) => {
             let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
             if (host == "home") {
@@ -125,12 +130,13 @@ export async function main(ns) {
                 availableRam
             }
         });
+        /*
         const newWeakenLogs = [];
-        for (const host of rootedHosts) {
+         (const host of rootedHosts) {
             await weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLogs);
         }
         if (newWeakenLogs.length) ns.tprint(`\n${newWeakenLogs.join('\n')}`);
-
+        */
         if(controlledHostsWithMetadata.length) {
             for (const host of rootedHosts.reverse()) {
                 await hack(ns, host, controlledHostsWithMetadata);
@@ -159,8 +165,8 @@ export async function main(ns) {
             newWeakens = [];
         }
         count += 1;
-        set('weakeningHosts', weakeningHosts);
-        set('hackingHosts', hackingHosts);
+        // set('weakeningHosts', weakeningHosts);
+        // set('hackingHosts', hackingHosts);
         await ns.sleep(10000);
     }
 }

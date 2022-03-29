@@ -43,8 +43,8 @@ async function hack(ns, host, controlledHostsWithMetadata, extraHackRounds = fal
     if (!hackingHosts.includes(host) || extraHackRounds) {
         for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 10; i += 1) {
             const processId = `extra-${shortId()}`;
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 512, host, processId);
-            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 3072, host, processId);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 60, host, processId);
+            await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 360, host, processId);
         }
         hackingHosts.push(host);
         newHacks.push(host);
