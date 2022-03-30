@@ -25,6 +25,8 @@ let controlledHosts = [];
 let newHacks = [];
 let newGrows = [];
 let newWeakens = [];
+let totalInitialRam = 0;
+const minHomeRamAvailable = 32;
 
 /**
  * @param {import("..").NS } ns
@@ -36,6 +38,7 @@ async function killHacks(ns, host) {
   ns.scriptKill(scriptPaths.weaken, host);
   ns.scriptKill(scriptPaths.watchSecurity, host);
   ns.scriptKill(scriptPaths.watchGrowth, host);
+  ns.scriptKill(scriptPaths.watchHack, host);
   if (host !== 'home') {
     ns.killall(host);
     await ns.scp(ns.ls('home', '/spider'), 'home', host);
@@ -51,8 +54,17 @@ function killProcesses(ns, processes) {
   return processes.map(({ host, script, args }) => ns.kill(script, host, ...args));
 }
 
-function getTotalRam(hostInfo) {
-  return hostInfo.reduce((acc, { availableRam }) => acc + availableRam, 0);
+function getControlledHostsWithMetadata(ns, hosts) {
+  return hosts.map((host) => {
+    let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
+    if (host === 'home') {
+      availableRam = Math.max(0, availableRam - minHomeRamAvailable);
+    }
+    return {
+      host,
+      availableRam,
+    };
+  });
 }
 
 /**
@@ -118,6 +130,7 @@ async function hack(ns, host, controlledHostsWithMetadata) {
     !weakeningHosts.has(host)
     && !growingHosts.has(host)
     && !hackingHosts.has(host)
+    && serverMaxMoney > 0
     && !isBelowMoneyThreshold
     && isAlreadyWeakened
   ) {
@@ -162,6 +175,7 @@ async function grow(ns, host, controlledHostsWithMetadata) {
     !weakeningHosts.has(host)
     && !growingHosts.has(host)
     && !hackingHosts.has(host)
+    && serverMaxMoney > 0
     && isBelowMoneyThreshold
     && isAlreadyWeakened
   ) {
@@ -198,11 +212,14 @@ async function grow(ns, host, controlledHostsWithMetadata) {
 }
 
 async function weaken(ns, host, controlledHostsWithMetadata) {
+  const serverMaxMoney = ns.getServerMaxMoney(host);
   const currentSecurityLevel = ns.getServerSecurityLevel(host);
   const minimumSecurityLevel = ns.getServerMinSecurityLevel(host);
   const isAlreadyWeakened = currentSecurityLevel < 3 + minimumSecurityLevel;
   if (
-    !isAlreadyWeakened && !weakeningHosts.has(host)
+    !isAlreadyWeakened
+    && !weakeningHosts.has(host)
+    && serverMaxMoney > 0
   ) {
     const newProcesses = [];
     // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
@@ -250,7 +267,6 @@ export async function main(ns) {
   weakeningHosts.clear();
   growingHosts.clear();
   hackingHosts.clear();
-  const minHomeRamAvailable = 16;
   let count = 1;
   let includedHostCount = 1;
 
@@ -265,17 +281,7 @@ export async function main(ns) {
     rootedHosts = JSON.parse(ns.read('/data/rootedHosts.txt')).slice(0, includedHostCount);
     controlledHosts = JSON.parse(ns.read('/data/controlledHosts.txt'));
 
-    const controlledHostsWithMetadata = controlledHosts.map((host) => {
-      let availableRam = ns.getServerMaxRam(host) - ns.getServerUsedRam(host);
-      if (host === 'home') {
-        availableRam = Math.max(0, availableRam - minHomeRamAvailable);
-      }
-      return {
-        host,
-        availableRam,
-      };
-    });
-    const totalRamBefore = getTotalRam(controlledHostsWithMetadata);
+    const controlledHostsWithMetadata = getControlledHostsWithMetadata(ns, controlledHosts);
 
     if (notifications.size) {
       notifications.forEach(({ host, status }) => {
@@ -315,11 +321,6 @@ export async function main(ns) {
         await grow(ns, host, controlledHostsWithMetadata);
       }
     }
-    const totalRamAfter = getTotalRam(controlledHostsWithMetadata);
-    if (totalRamAfter / totalRamBefore > 0.25) {
-      ns.tprint(`Increasing Host Count: After hacking still have ${((totalRamAfter / totalRamBefore) * 100).toFixed(2)}% free.`);
-      includedHostCount += 1;
-    }
 
     if (newHacks.length || newWeakens.length || newGrows.length) {
       ns.tprint(`DISTRIBUTOR:
@@ -343,6 +344,12 @@ export async function main(ns) {
       newWeakens = [];
     }
     count += 1;
+    if (count % 3 === 0) {
+      ns.tprint('Increasing target host count.');
+      includedHostCount += 1;
+    } else {
+      includedHostCount += 1;
+    }
     await awaitAndProcessNotifications(ns);
   }
 }

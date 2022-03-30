@@ -11,7 +11,6 @@ module.exports = {
     sourceType: 'module',
   },
   rules: {
-    'import/no-unresolved': 'off',
     'import/extensions': 'off',
     'import/no-absolute-path': 'off',
     'import/prefer-default-export': 'off',
