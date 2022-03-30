@@ -112,15 +112,15 @@ async function hack(ns, host, controlledHostsWithMetadata) {
       const processTag = shortId();
       await ns.sleep(30);
       newProcesses.push(
-        ...(await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 1, host, processTag)),
         ...(await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.hack, 6, host, processTag)),
+        ...(await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, 1, host, processTag)),
       );
     }
     if (newProcesses.length) {
-      newProcesses.push(await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchHack, 1, host, 'initial'));
-      runningProcesses.set(host, newProcesses);
+      await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchHack, 1, host, 'initial');
       hackingHosts.add(host);
       newHacks.push(host);
+      runningProcesses.set(host, newProcesses);
     }
   }
 }
@@ -139,19 +139,18 @@ async function grow(ns, host, controlledHostsWithMetadata) {
     const growThreadsNeeded = ns.growthAnalyze(host, growthAmountNeeded);
     const weakenThreadsNeeded = Math.ceil(growThreadsNeeded / 6);
     const newProcesses = [];
-    for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 10; i += 1) {
-      const processTag = shortId();
-      await ns.sleep(30);
-      newProcesses.push(
-        ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadsNeeded, host, processTag),
-        ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.grow, growThreadsNeeded, host, processTag),
-      );
-    }
+
+    const processTag = shortId();
+    await ns.sleep(30);
+    newProcesses.push(
+      ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.grow, growThreadsNeeded, host, processTag),
+      ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadsNeeded, host, processTag),
+    );
     if (newProcesses.length) {
-      newProcesses.push(...await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchGrowth, 1, host, 'initial'));
-      runningProcesses.set(host, newProcesses);
+      await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchGrowth, 1, host, 'initial');
       growingHosts.add(host);
       newGrows.push(host);
+      runningProcesses.set(host, newProcesses);
     }
   }
 }
@@ -173,10 +172,9 @@ async function weakenIfNeeded(ns, host, controlledHostsWithMetadata, newWeakenLo
 
     const newWeakenThreds = await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, 'initial');
     if (newWeakenThreds.length) {
+      await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchSecurity, 1, host, 'initial');
       weakeningHosts.add(host);
-      newProcesses.push(
-        ...await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchSecurity, 1, host, 'initial'),
-      );
+      newWeakens.push(host);
       runningProcesses.set(host, newProcesses);
     }
   }
@@ -258,7 +256,7 @@ export async function main(ns) {
       if (newWeakenLogs.length) ns.tprint(`\n${newWeakenLogs.join('\n')}`);
     }
 
-    if (newHacks.length || newWeakens.length) {
+    if (newHacks.length || newWeakens.length || newGrows.length) {
       ns.tprint(`DISTRIBUTOR:
             \tLoop #${count}
             \tRooted Hosts Count: ${rootedHosts.size}
