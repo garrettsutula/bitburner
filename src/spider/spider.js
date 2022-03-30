@@ -1,6 +1,7 @@
-let discoveredHosts = [];
-let rootedHosts = [];
-let controlledHosts = [];
+// Managed by spider.js
+const discoveredHosts = new Set();
+const rootedHosts = new Set();
+const controlledHosts = new Set();
 
 /** @param {import("..").NS } ns */
 function prep(ns, target) {
@@ -8,12 +9,13 @@ function prep(ns, target) {
   const currentHackingLevel = ns.getHackingLevel();
   if (requiredHackingLevel
         > currentHackingLevel) {
-    discoveredHosts.push(target);
+    discoveredHosts.add(target);
     ns.tprint(`SPIDER: Can't hack ${target} yet, required level: ${requiredHackingLevel}`);
     return false;
   }
   if (ns.hasRootAccess(target)) {
-    rootedHosts.push(target);
+    rootedHosts.add(target);
+    controlledHosts.add(target);
     return true;
   }
   function can(action) {
@@ -28,37 +30,38 @@ function prep(ns, target) {
   if (can('sqlinject')) { ns.sqlinject(target); ports += 1; }
 
   if (ports >= ns.getServerNumPortsRequired(target)) {
-    rootedHosts.push(target);
+    rootedHosts.add(target);
+    controlledHosts.add(target);
     return ns.nuke(target);
   }
-  discoveredHosts.push(target);
+  discoveredHosts.add(target);
   return false;
 }
 
 /** @param {import("..").NS } ns */
 async function spider(ns) {
+  discoveredHosts.clear();
+  rootedHosts.clear();
+  controlledHosts.clear();
   const purchasedServers = ns.getPurchasedServers();
-  discoveredHosts = [];
-  rootedHosts = [];
   let hosts = [];
   const seen = ['darkweb'].concat(purchasedServers);
   hosts.push('home');
+  ['home'].concat(purchasedServers).forEach((host) => controlledHosts.add(host));
   while (hosts.length > 0) {
-    controlledHosts = ['home'].concat(purchasedServers);
     const host = hosts.shift();
 
     if (!seen.includes(host)) {
       seen.push(host);
       // If we can root the host, scan and add the hosts we find to the hosts crawl list.
-      if (host !== 'home' && prep(ns, host)) {
+      if (host === 'home' || prep(ns, host)) {
         hosts = hosts.concat(ns.scan(host));
       }
     }
   }
-
-  await ns.write('/data/discoveredHosts.txt', JSON.stringify(discoveredHosts), 'w');
-  await ns.write('/data/rootedHosts.txt', JSON.stringify(rootedHosts), 'w');
-  await ns.write('/data/controlledHosts.txt', JSON.stringify(controlledHosts.concat(rootedHosts.reverse())), 'w');
+  await ns.write('/data/discoveredHosts.txt', JSON.stringify(Array.from(discoveredHosts.values())), 'w');
+  await ns.write('/data/rootedHosts.txt', JSON.stringify(Array.from(rootedHosts.values())), 'w');
+  await ns.write('/data/controlledHosts.txt', JSON.stringify(Array.from(controlledHosts.values())), 'w');
 }
 
 /** @param {import("..").NS } ns */
@@ -67,9 +70,6 @@ export async function main(ns) {
   ns.disableLog('getHackingLevel');
   ns.disableLog('getServerRequiredHackingLevel');
   ns.disableLog('scan');
-
-  // Clear the LocalStorage that the spider owns.
-  // clearSpiderStorage();
 
   while (true) {
     await spider(ns);

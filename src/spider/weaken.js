@@ -1,8 +1,7 @@
 /** @param {import("..").NS } ns */
 export async function main(ns) {
-  const [target, tag] = ns.args;
-  const securityThresh = ns.getServerMinSecurityLevel(target) + 3;
-  while ((ns.getServerSecurityLevel(target) > securityThresh) || tag !== 'initial') {
+  const [target] = ns.args;
+  while (true) {
     await ns.weaken(target);
   }
 }

@@ -2,6 +2,6 @@
 export async function main(ns) {
   const [target] = ns.args;
   while (true) {
-    await ns.hack(target);
+    await ns.grow(target);
   }
 }
