@@ -51,6 +51,10 @@ function killProcesses(ns, processes) {
   return processes.map(({ host, script, args }) => ns.kill(script, host, ...args));
 }
 
+function getTotalRam(hostInfo) {
+  return hostInfo.reduce((acc, { availableRam }) => acc + availableRam, 0);
+}
+
 /**
  * @param {import("..").NS } ns */
 async function awaitAndProcessNotifications(ns) {
@@ -106,16 +110,18 @@ async function scheduleOn(ns, controlledHostsWithMetadata, jobScript, jobThreads
 async function hack(ns, host, controlledHostsWithMetadata) {
   const serverMaxMoney = ns.getServerMaxMoney(host);
   const serverMoneyAvailable = ns.getServerMoneyAvailable(host);
-
-  if (!weakeningHosts.has(host) && !growingHosts.has(host) && !hackingHosts.has(host) && serverMoneyAvailable > (0.50 * serverMaxMoney)) {
+  const currentSecurityLevel = ns.getServerSecurityLevel(host);
+  const minimumSecurityLevel = ns.getServerMinSecurityLevel(host);
+  const isBelowMoneyThreshold = serverMoneyAvailable < 0.90 * serverMaxMoney;
+  const isAlreadyWeakened = currentSecurityLevel < 3 + minimumSecurityLevel;
+  if (
+    !weakeningHosts.has(host)
+    && !growingHosts.has(host)
+    && !hackingHosts.has(host)
+    && !isBelowMoneyThreshold
+    && isAlreadyWeakened
+  ) {
     const newProcesses = [];
-    ns.tprint(`
-    *************************
-    **** NEW HACK TARGET ****
-    \tHost: ${host}
-    \tAvailable Money: ${serverMoneyAvailable}
-    \tExpected Earnings: ${(serverMaxMoney * 0.6) - (serverMaxMoney * 0.5)}
-    *************************`);
     for (let i = 0; controlledHostsWithMetadata.length > 0 && i < 5; i += 1) {
       const processTag = shortId();
       await ns.sleep(30);
@@ -125,11 +131,21 @@ async function hack(ns, host, controlledHostsWithMetadata) {
       );
     }
     if (newProcesses.length) {
+      ns.print(`
+      *************************
+      **** NEW HACK TARGET ****
+      \tHost: ${host}
+      \tAvailable Money: ${serverMoneyAvailable.toFixed(0)}
+      \tExpected Earnings: ${(serverMaxMoney * 0.6) - (serverMaxMoney * 0.5)}
+      *************************`);
       await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchHack, 1, host, 'hack-stage');
       hackingHosts.add(host);
       newHacks.push(host);
       runningProcesses.set(host, newProcesses);
     }
+  } else {
+    ns.print(`Hack: skipping ${host}, isAlreadyWeakened: ${isAlreadyWeakened} alreadyGrown: ${serverMoneyAvailable > (0.85 * serverMaxMoney)}
+    growing: ${growingHosts.has(host)}, hacking: ${hackingHosts.has(host)}, weakening: ${weakeningHosts.has(host)}`);
   }
 }
 
@@ -138,14 +154,20 @@ async function hack(ns, host, controlledHostsWithMetadata) {
 async function grow(ns, host, controlledHostsWithMetadata) {
   const serverMaxMoney = ns.getServerMaxMoney(host);
   const serverMoneyAvailable = ns.getServerMoneyAvailable(host);
+  const currentSecurityLevel = ns.getServerSecurityLevel(host);
+  const minimumSecurityLevel = ns.getServerMinSecurityLevel(host);
+  const isBelowMoneyThreshold = serverMoneyAvailable < 0.90 * serverMaxMoney;
+  const isAlreadyWeakened = currentSecurityLevel < 3 + minimumSecurityLevel;
   if (
     !weakeningHosts.has(host)
     && !growingHosts.has(host)
-    && serverMoneyAvailable < 0.50 * serverMaxMoney
+    && !hackingHosts.has(host)
+    && isBelowMoneyThreshold
+    && isAlreadyWeakened
   ) {
-    const growthAmountNeeded = (serverMaxMoney * 0.6) / serverMoneyAvailable;
-    const growThreadsNeeded = ns.growthAnalyze(host, growthAmountNeeded);
-    const weakenThreadsNeeded = Math.ceil(growThreadsNeeded / 6);
+    const growthAmountNeeded = (serverMaxMoney * 0.90) / serverMoneyAvailable;
+    const growThreadsNeeded = Math.ceil(ns.growthAnalyze(host, growthAmountNeeded) / 18) || 1;
+    const weakenThreadsNeeded = Math.ceil(growThreadsNeeded / (18 * 6)) || 1;
     const newProcesses = [];
 
     const processTag = shortId();
@@ -154,28 +176,34 @@ async function grow(ns, host, controlledHostsWithMetadata) {
       ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadsNeeded, host, processTag),
     );
     if (newProcesses.length) {
-      ns.tprint(`
+      ns.print(`
       *************************
       **** NEW GROW TARGET ****
       \tHost: ${host}
-      \tAvailable Money: ${serverMoneyAvailable}
+      \tAvailable Money: ${serverMoneyAvailable.toFixed(0)}
       \tMax Money: ${serverMaxMoney}
-      \tNeed to Grow by (60% of Max): ${(serverMaxMoney * 0.6) / serverMoneyAvailable}
-      \tGrow threads needed: ${growThreadsNeeded}
+      \tNeed to Grow by (60% of Max): ${((serverMaxMoney * 0.6) / serverMoneyAvailable).toFixed(2)}
+      \tGrow threads needed: ${Math.ceil(growThreadsNeeded)}
+      \tStarting grow threads (1/18th speed): ${Math.ceil(growThreadsNeeded / 18)}
       *************************`);
       await scheduleOn(ns, [{ host: 'home', availableRam: 99999 }], scriptPaths.watchGrowth, 1, host, processTag);
       growingHosts.add(host);
       newGrows.push(host);
       runningProcesses.set(host, newProcesses);
     }
+  } else {
+    ns.print(`Grow: skipping ${host}, isAlreadyWeakened: ${isAlreadyWeakened} alreadyGrown: ${serverMoneyAvailable > 0.90 * serverMaxMoney}
+    growing: ${growingHosts.has(host)}, hacking: ${hackingHosts.has(host)}, weakening: ${weakeningHosts.has(host)}`);
   }
 }
 
 async function weaken(ns, host, controlledHostsWithMetadata) {
   const currentSecurityLevel = ns.getServerSecurityLevel(host);
   const minimumSecurityLevel = ns.getServerMinSecurityLevel(host);
-  const notAlreadyWeakened = currentSecurityLevel > 3 + minimumSecurityLevel;
-  if (notAlreadyWeakened && !weakeningHosts.has(host)) {
+  const isAlreadyWeakened = currentSecurityLevel < 3 + minimumSecurityLevel;
+  if (
+    !isAlreadyWeakened && !weakeningHosts.has(host)
+  ) {
     const newProcesses = [];
     // Spawn tons of weaken processes so it only needs to execute as few iterations as possible.
     const weakenThreadCount = Math.floor(
@@ -186,7 +214,7 @@ async function weaken(ns, host, controlledHostsWithMetadata) {
       ...await scheduleOn(ns, controlledHostsWithMetadata, scriptPaths.weaken, weakenThreadCount, host, processTag),
     );
     if (newProcesses.length) {
-      ns.tprint(`
+      ns.print(`
       ***************************
       **** NEW WEAKEN TARGET ****
       \tHost: ${host}
@@ -199,21 +227,32 @@ async function weaken(ns, host, controlledHostsWithMetadata) {
       newWeakens.push(host);
       runningProcesses.set(host, newProcesses);
     }
+  } else {
+    ns.print(`Weaken: skipping ${host}, isAlreadyWeakened: ${isAlreadyWeakened}, currentlyWeakening: ${weakeningHosts.has(host)}
+    growing: ${growingHosts.has(host)}, hacking: ${hackingHosts.has(host)}, weakening: ${weakeningHosts.has(host)}`);
   }
 }
 
 /** @param {import("..").NS } ns */
 export async function main(ns) {
+  ns.disableLog('disableLog');
   ns.disableLog('getServerSecurityLevel');
   ns.disableLog('getServerMinSecurityLevel');
+  ns.disableLog('getServerMaxMoney');
+  ns.disableLog('getServerMoneyAvailable');
   ns.disableLog('getServerUsedRam');
   ns.disableLog('getServerMaxRam');
   ns.disableLog('scp');
+  ns.disableLog('sleep');
+  ns.disableLog('exec');
+  ns.disableLog('kill');
+  ns.disableLog('killall');
   weakeningHosts.clear();
   growingHosts.clear();
   hackingHosts.clear();
   const minHomeRamAvailable = 16;
   let count = 1;
+  let includedHostCount = 1;
 
   rootedHosts = JSON.parse(ns.read('/data/rootedHosts.txt'));
   controlledHosts = JSON.parse(ns.read('/data/controlledHosts.txt'));
@@ -223,7 +262,7 @@ export async function main(ns) {
   }
 
   while (true) {
-    rootedHosts = JSON.parse(ns.read('/data/rootedHosts.txt'));
+    rootedHosts = JSON.parse(ns.read('/data/rootedHosts.txt')).slice(0, includedHostCount);
     controlledHosts = JSON.parse(ns.read('/data/controlledHosts.txt'));
 
     const controlledHostsWithMetadata = controlledHosts.map((host) => {
@@ -236,6 +275,7 @@ export async function main(ns) {
         availableRam,
       };
     });
+    const totalRamBefore = getTotalRam(controlledHostsWithMetadata);
 
     if (notifications.size) {
       notifications.forEach(({ host, status }) => {
@@ -275,6 +315,12 @@ export async function main(ns) {
         await grow(ns, host, controlledHostsWithMetadata);
       }
     }
+    const totalRamAfter = getTotalRam(controlledHostsWithMetadata);
+    if (totalRamAfter / totalRamBefore > 0.25) {
+      ns.tprint(`Increasing Host Count: After hacking still have ${((totalRamAfter / totalRamBefore) * 100).toFixed(2)}% free.`);
+      includedHostCount += 1;
+    }
+
     if (newHacks.length || newWeakens.length || newGrows.length) {
       ns.tprint(`DISTRIBUTOR:
       \tLoop #${count}
